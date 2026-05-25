@@ -618,6 +618,12 @@
                             <div class="md:col-span-1">
                                 <input type="number" step="1" id="prod-sell-3" placeholder="$ Venta 3 (opcional)" class="w-full rounded p-2 text-sm font-bold text-amber-500">
                             </div>
+                            <div class="md:col-span-4">
+                                <label class="block text-xs text-slate-400 mb-1">Imagen del producto</label>
+                                <input type="file" id="prod-image" accept="image/*" class="w-full rounded p-2 text-xs bg-slate-950 border border-slate-700 file:mr-3 file:rounded file:border-0 file:bg-amber-500 file:px-3 file:py-1 file:text-slate-900 file:font-semibold">
+                                <input type="hidden" id="prod-image-data">
+                                <p class="text-[11px] text-slate-500 mt-1">Opcional. Se guarda localmente para visualizar en ventas.</p>
+                            </div>
                             <div class="md:col-span-4 text-right">
                                 <button type="submit" class="bg-emerald-600 text-white px-6 py-2 rounded hover:bg-emerald-500 font-bold shadow-lg shadow-emerald-900/50"><i class="fas fa-save mr-2"></i>Guardar Producto</button>
                             </div>
@@ -643,6 +649,10 @@
                 </div>
             `;
             refreshProductConfigUI();
+            const productImageInput = document.getElementById('prod-image');
+            if (productImageInput) {
+                productImageInput.addEventListener('change', handleProductImageUpload);
+            }
             
             document.getElementById('product-form').addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -650,6 +660,7 @@
                     showToast('Crea primero categorías y medidas', 'error');
                     return;
                 }
+                const imageData = document.getElementById('prod-image-data')?.value || '';
                 const newProd = {
     id: generateId(),
     name: document.getElementById('prod-name').value,
@@ -662,7 +673,8 @@
         parseInt(document.getElementById('prod-sell-1').value),
         parseInt(document.getElementById('prod-sell-2').value) || null,
         parseInt(document.getElementById('prod-sell-3').value) || null
-    ]
+    ],
+    image: imageData || null
 };
                 newProd.sellPrice = newProd.sellPrices[0];
 
@@ -671,7 +683,9 @@
     if (index !== -1) {
         db.products[index] = {
             ...db.products[index], // 👈 conserva stock
-            ...newProd
+            ...newProd,
+            id: db.products[index].id,
+            image: newProd.image || db.products[index].image || null
         };
     }
     productEditing = null;
@@ -684,6 +698,8 @@
                  saveDB();
                 refreshPOSSearchIndex();
                 e.target.reset();
+                const imageDataField = document.getElementById('prod-image-data');
+                if (imageDataField) imageDataField.value = '';
                 showToast('Producto guardado exitosamente');
                 refreshProductConfigUI();
             }); // 👈 CIERRA addEventListener
@@ -727,6 +743,7 @@
                     <td class="p-3">
                         <div class="font-bold text-white">${p.name}</div>
                         <div class="text-xs text-slate-500">${p.code} | ${p.brand} | ${p.measure}</div>
+                        ${p.image ? `<img src="${p.image}" alt="${p.name}" class="mt-2 w-10 h-10 rounded object-cover border border-slate-600">` : ''}
                     </td>
                     <td class="p-3"><span class="bg-slate-900 px-2 py-0.5 rounded text-xs text-slate-400 border border-slate-700">${p.category}</span></td>
                     <td class="p-3 text-right ${p.stock <= 5 ? 'text-red-500 font-bold' : 'text-emerald-400'}">${p.stock}</td>
@@ -792,8 +809,26 @@
             document.getElementById('prod-sell-1').value = product.sellPrices?.[0] ?? product.sellPrice ?? '';
             document.getElementById('prod-sell-2').value = product.sellPrices?.[1] ?? '';
             document.getElementById('prod-sell-3').value = product.sellPrices?.[2] ?? '';
+            document.getElementById('prod-image-data').value = product.image || '';
 
             productEditing = id;
+        }
+
+        function handleProductImageUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                showToast('El archivo debe ser una imagen válida', 'error');
+                event.target.value = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+                const imageDataField = document.getElementById('prod-image-data');
+                if (imageDataField) imageDataField.value = String(reader.result || '');
+                showToast('Imagen cargada para el producto');
+            };
+            reader.readAsDataURL(file);
         }
 
         function deleteProduct(id) {
@@ -1078,16 +1113,21 @@
                 : '';
 
             list.innerHTML = `${cappedInfo}${visibleProducts.map(p => `
-    <div class="bg-slate-800 border border-slate-700 p-3 rounded-xl cursor-pointer hover:border-amber-500 hover:shadow-lg hover:shadow-amber-900/20 transition group flex flex-col justify-between h-[120px] relative overflow-hidden" onclick="addToCart('${p.id}')">
+    <div class="bg-slate-800 border border-slate-700 p-3 rounded-xl cursor-pointer hover:border-amber-500 hover:shadow-lg hover:shadow-amber-900/20 transition group flex flex-col justify-between h-[140px] relative overflow-hidden" onclick="addToCart('${p.id}')">
         <div class="absolute top-0 right-0 bg-slate-700 text-slate-300 text-[9px] px-1.5 py-0.5 rounded-bl-lg z-10 font-mono">
             ${p.measure}
         </div>
         
-        <div class="flex-1">
+        <div class="flex-1 flex gap-2">
+            <div class="w-12 h-12 rounded border border-slate-700 overflow-hidden bg-slate-900 shrink-0">
+                ${p.image ? `<img src="${p.image}" alt="${p.name}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-slate-500 text-[10px]"><i class="fas fa-shoe-prints"></i></div>`}
+            </div>
+            <div>
             <h4 class="font-bold text-xs text-slate-200 leading-tight mb-1 group-hover:text-amber-500 transition-colors line-clamp-2 overflow-hidden" title="${p.name}">
                 ${p.name.toUpperCase()}
             </h4>
             <p class="text-[9px] text-slate-500 uppercase tracking-tighter">${p.category}</p>
+            </div>
         </div>
 
         <div class="mt-2 flex justify-between items-end">
@@ -1135,6 +1175,7 @@
                 currentCart.push({
                     id: prod.id,
                     name: prod.name,
+                    image: prod.image || null,
                     price: productPrices[0],
                     qty: 1,
                     qtyStep: 1,
@@ -1166,7 +1207,12 @@
             cartContainer.innerHTML = currentCart.map((item, idx) => `
                 <div class="bg-slate-700/50 p-2 rounded-lg border border-slate-700 flex flex-col gap-2 relative group">
                     <div class="flex justify-between items-start">
-                        <span class="font-bold text-slate-200 text-sm truncate w-32 leading-tight">${item.name}</span>
+                        <div class="flex items-start gap-2 min-w-0">
+                            <div class="w-10 h-10 rounded border border-slate-600 overflow-hidden bg-slate-900 shrink-0">
+                                ${item.image ? `<img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-slate-500 text-[10px]"><i class="fas fa-shoe-prints"></i></div>`}
+                            </div>
+                            <span class="font-bold text-slate-200 text-sm truncate w-28 leading-tight">${item.name}</span>
+                        </div>
                         <button onclick="removeFromCart(${idx})" class="text-slate-500 hover:text-red-400 transition"><i class="fas fa-times"></i></button>
                     </div>
                     <div class="flex items-center justify-between text-xs">
@@ -1412,11 +1458,19 @@
             if(method === 'Credito') {
                 if(!clientId) return alert("Selecciona un cliente para registrar el crédito.");
             }
+            const outOfStockItem = currentCart.find((item) => {
+                const product = db.products.find((prod) => String(prod.id) === String(item.id));
+                return !product || (Number(product.stock) || 0) < (Number(item.qty) || 0);
+            });
+            if (outOfStockItem) {
+                showToast(`Stock insuficiente para ${outOfStockItem.name}. Ajusta el carrito antes de cobrar.`, 'error');
+                return;
+            }
 
             // Descontar inventario
             currentCart.forEach(item => {
                 const p = db.products.find(prod => prod.id === item.id);
-                if(p) p.stock -= item.qty;
+                if(p) p.stock = Math.max((Number(p.stock) || 0) - (Number(item.qty) || 0), 0);
             });
 
             const sale = {
